@@ -135,24 +135,27 @@ export const createOrder = async (req, res) => {
         await customer.save();
 
         // Generate Invoice PDF and Send Email
-        try {
-            const invoiceBuffer = await generateInvoicePDF(order);
-
-            await sendEmail(
-                customerDetails.email,
-                `Order Confirmation - #${order.orderNumber}`,
-                `Dear ${customerDetails.firstName},\n\nThank you for your order! Please find your invoice attached.\n\nBest regards,\nGeekspot Team`,
-                [
-                    {
-                        filename: `Invoice-${order.orderNumber}.pdf`,
-                        content: invoiceBuffer
-                    }
-                ]
-            );
-        } catch (emailError) {
-            console.error('Error sending invoice email:', emailError);
-            // Continue execution, don't fail the order
-        }
+        // Generate Invoice PDF and Send Email in background (don't block response)
+        generateInvoicePDF(order).then(async (invoiceBuffer) => {
+            try {
+                await sendEmail(
+                    customerDetails.email,
+                    `Order Confirmation - #${order.orderNumber}`,
+                    `Dear ${customerDetails.firstName},\n\nThank you for your order! Please find your invoice attached.\n\nBest regards,\nGeekspot Team`,
+                    [
+                        {
+                            filename: `Invoice-${order.orderNumber}.pdf`,
+                            content: invoiceBuffer
+                        }
+                    ]
+                );
+                console.log(`Order confirmation email sent to ${customerDetails.email}`);
+            } catch (emailError) {
+                console.error('Error sending invoice email:', emailError);
+            }
+        }).catch(pdfError => {
+            console.error('Error generating PDF for email:', pdfError);
+        });
 
         res.status(201).json({
             success: true,
